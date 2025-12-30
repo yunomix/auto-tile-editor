@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Tile Editor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      --bg: #f7f7fb;
+      --panel: #ffffff;
+      --border: #d5d7e5;
+      --accent: #2563eb;
+      --text: #1f2937;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 16px;
+      padding: 16px;
+      min-height: calc(100vh - 64px);
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    section h2 {
+      font-size: 16px;
+      margin: 0;
+    }
+
+    .field-group {
+      display: grid;
+      gap: 10px;
+    }
+
+    .field-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4b5563;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    input[type="file"] {
+      font-size: 13px;
+    }
+
+    button {
+      border: none;
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+
+    button.secondary {
+      background: #e2e8f0;
+      color: #111827;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .panel-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tiles-wrapper {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px;
+      max-height: 320px;
+      overflow: auto;
+      background: #f8fafc;
+    }
+
+    .tiles-wrapper canvas {
+      display: block;
+      background: repeating-conic-gradient(#e5e7eb 0 25%, #f3f4f6 0 50%) 50% / 24px 24px;
+      border-radius: 8px;
+    }
+
+    .map-wrapper {
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: repeating-conic-gradient(#e5e7eb 0 25%, #f3f4f6 0 50%) 50% / 24px 24px;
+    }
+
+    #mapCanvas {
+      display: block;
+    }
+
+    .tool-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .tool-row label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #4b5563;
+    }
+
+    .tool-row input[type="radio"] {
+      margin-right: 4px;
+    }
+
+    .status {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Auto Tile Editor</h1>
+  </header>
+  <main>
+    <section>
+      <h2>マスク設定エリア</h2>
+      <div class="field-group">
+        <label>PNGファイル</label>
+        <input type="file" id="fileInput" accept="image/png" />
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label>グリッドサイズ (px)</label>
+          <input type="number" id="tileSize" min="8" value="32" />
+        </div>
+        <div class="field-group">
+          <label>パディング (px)</label>
+          <input type="number" id="padding" min="0" value="0" />
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label>オフセットX (px)</label>
+          <input type="number" id="offsetX" value="0" />
+        </div>
+        <div class="field-group">
+          <label>オフセットY (px)</label>
+          <input type="number" id="offsetY" value="0" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Mask Type</label>
+        <select id="maskType">
+          <option value="3">3x3</option>
+          <option value="2">2x2</option>
+        </select>
+      </div>
+      <div class="panel-row">
+        <button id="sliceButton">スライス</button>
+        <button class="secondary" id="resetMasks">マスクをリセット</button>
+      </div>
+      <div class="status" id="tileStatus">PNGを読み込んでスライスしてください。</div>
+      <div class="tiles-wrapper">
+        <canvas id="tilesCanvas" width="300" height="200"></canvas>
+      </div>
+      <div class="status">クリックでマップチップのマスクを設定します（赤が有効）。</div>
+    </section>
+
+    <section>
+      <h2>マップ表示エリア</h2>
+      <div class="field-row">
+        <div class="field-group">
+          <label>マップ横 (セル数)</label>
+          <input type="number" id="mapCols" min="1" value="16" />
+        </div>
+        <div class="field-group">
+          <label>マップ縦 (セル数)</label>
+          <input type="number" id="mapRows" min="1" value="12" />
+        </div>
+      </div>
+      <div class="tool-row">
+        <label><input type="radio" name="tool" value="auto" checked />Auto Tile</label>
+        <label><input type="radio" name="tool" value="pencil" />鉛筆ツール</label>
+        <label>色 <input type="color" id="pencilColor" value="#ef4444" /></label>
+        <label>太さ <input type="number" id="pencilSize" value="2" min="1" max="16" /></label>
+        <span class="badge" id="selectedBadge">選択中: なし</span>
+      </div>
+      <div class="panel-row">
+        <button class="secondary" id="resizeMap">マップサイズ反映</button>
+        <button id="exportButton">PNG保存</button>
+      </div>
+      <div class="map-wrapper">
+        <canvas id="mapCanvas" width="512" height="384"></canvas>
+      </div>
+      <div class="status">
+        Auto Tile: マップチップを並べて描画します。鉛筆ツール: マップやマップチップに直接描画できます。
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const tileSizeInput = document.getElementById("tileSize");
+    const paddingInput = document.getElementById("padding");
+    const offsetXInput = document.getElementById("offsetX");
+    const offsetYInput = document.getElementById("offsetY");
+    const maskTypeSelect = document.getElementById("maskType");
+    const sliceButton = document.getElementById("sliceButton");
+    const resetMasksButton = document.getElementById("resetMasks");
+    const tilesCanvas = document.getElementById("tilesCanvas");
+    const tileStatus = document.getElementById("tileStatus");
+    const selectedBadge = document.getElementById("selectedBadge");
+
+    const mapColsInput = document.getElementById("mapCols");
+    const mapRowsInput = document.getElementById("mapRows");
+    const resizeMapButton = document.getElementById("resizeMap");
+    const exportButton = document.getElementById("exportButton");
+    const mapCanvas = document.getElementById("mapCanvas");
+    const pencilColorInput = document.getElementById("pencilColor");
+    const pencilSizeInput = document.getElementById("pencilSize");
+
+    const tilesCtx = tilesCanvas.getContext("2d");
+    const mapCtx = mapCanvas.getContext("2d");
+
+    let sourceImage = null;
+    let tiles = [];
+    let selectedTileIndex = null;
+    let mapGrid = [];
+    let mapCols = Number(mapColsInput.value);
+    let mapRows = Number(mapRowsInput.value);
+    let isDrawing = false;
+
+    const getTool = () => document.querySelector("input[name=tool]:checked").value;
+
+    function createEmptyMask(type) {
+      const size = Number(type);
+      return Array.from({ length: size }, () => Array.from({ length: size }, () => true));
+    }
+
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    function sliceTiles() {
+      if (!sourceImage) {
+        tileStatus.textContent = "PNGファイルを選択してください。";
+        return;
+      }
+      const tileSize = Number(tileSizeInput.value);
+      const padding = Number(paddingInput.value);
+      const offsetX = Number(offsetXInput.value);
+      const offsetY = Number(offsetYInput.value);
+      const maskType = Number(maskTypeSelect.value);
+
+      tiles = [];
+      for (let y = offsetY; y + tileSize <= sourceImage.height; y += tileSize + padding) {
+        for (let x = offsetX; x + tileSize <= sourceImage.width; x += tileSize + padding) {
+          const canvas = document.createElement("canvas");
+          canvas.width = tileSize;
+          canvas.height = tileSize;
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, tileSize, tileSize);
+          ctx.drawImage(sourceImage, x, y, tileSize, tileSize, 0, 0, tileSize, tileSize);
+          tiles.push({
+            canvas,
+            ctx,
+            maskType,
+            mask: createEmptyMask(maskType),
+          });
+        }
+      }
+
+      selectedTileIndex = tiles.length > 0 ? 0 : null;
+      updateSelectedBadge();
+      renderTiles();
+      tileStatus.textContent = `${tiles.length} 枚のマップチップを作成しました。`;
+    }
+
+    function updateSelectedBadge() {
+      if (selectedTileIndex === null) {
+        selectedBadge.textContent = "選択中: なし";
+      } else {
+        selectedBadge.textContent = `選択中: #${selectedTileIndex + 1}`;
+      }
+    }
+
+    function renderTiles() {
+      const tileSize = Number(tileSizeInput.value);
+      const columns = tileSize ? Math.max(1, Math.floor(tilesCanvas.parentElement.clientWidth / tileSize)) : 1;
+      const rows = Math.ceil(tiles.length / columns) || 1;
+
+      tilesCanvas.width = columns * tileSize;
+      tilesCanvas.height = rows * tileSize;
+
+      tilesCtx.clearRect(0, 0, tilesCanvas.width, tilesCanvas.height);
+
+      tiles.forEach((tile, index) => {
+        const col = index % columns;
+        const row = Math.floor(index / columns);
+        const x = col * tileSize;
+        const y = row * tileSize;
+        tilesCtx.drawImage(tile.canvas, x, y);
+
+        tilesCtx.strokeStyle = index === selectedTileIndex ? "#2563eb" : "rgba(31, 41, 55, 0.2)";
+        tilesCtx.lineWidth = index === selectedTileIndex ? 3 : 1;
+        tilesCtx.strokeRect(x + 0.5, y + 0.5, tileSize - 1, tileSize - 1);
+
+        if (index === selectedTileIndex) {
+          drawMaskOverlay(tile, x, y, tileSize);
+        }
+      });
+    }
+
+    function drawMaskOverlay(tile, offsetX, offsetY, tileSize) {
+      const size = tile.maskType;
+      const cell = tileSize / size;
+      tilesCtx.save();
+      tilesCtx.fillStyle = "rgba(239, 68, 68, 0.4)";
+      for (let r = 0; r < size; r += 1) {
+        for (let c = 0; c < size; c += 1) {
+          if (tile.mask[r][c]) {
+            tilesCtx.fillRect(offsetX + c * cell, offsetY + r * cell, cell, cell);
+          }
+        }
+      }
+      tilesCtx.restore();
+    }
+
+    function resetMasks() {
+      const maskType = Number(maskTypeSelect.value);
+      tiles.forEach((tile) => {
+        tile.maskType = maskType;
+        tile.mask = createEmptyMask(maskType);
+      });
+      renderTiles();
+      renderMap();
+    }
+
+    function initMap() {
+      mapCols = Number(mapColsInput.value);
+      mapRows = Number(mapRowsInput.value);
+      mapGrid = Array.from({ length: mapRows }, () => Array.from({ length: mapCols }, () => null));
+      resizeMapCanvas();
+      renderMap();
+    }
+
+    function resizeMapCanvas() {
+      const tileSize = Number(tileSizeInput.value);
+      mapCanvas.width = mapCols * tileSize;
+      mapCanvas.height = mapRows * tileSize;
+    }
+
+    function renderMap() {
+      const tileSize = Number(tileSizeInput.value);
+      mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+      mapCtx.imageSmoothingEnabled = false;
+
+      for (let row = 0; row < mapRows; row += 1) {
+        for (let col = 0; col < mapCols; col += 1) {
+          const tileIndex = mapGrid[row][col];
+          if (tileIndex === null) {
+            continue;
+          }
+          const tile = tiles[tileIndex];
+          const x = col * tileSize;
+          const y = row * tileSize;
+          drawAutoTile(tile, row, col, x, y, tileSize);
+        }
+      }
+
+      mapCtx.strokeStyle = "rgba(148, 163, 184, 0.5)";
+      mapCtx.lineWidth = 1;
+      for (let row = 0; row <= mapRows; row += 1) {
+        mapCtx.beginPath();
+        mapCtx.moveTo(0, row * tileSize + 0.5);
+        mapCtx.lineTo(mapCanvas.width, row * tileSize + 0.5);
+        mapCtx.stroke();
+      }
+      for (let col = 0; col <= mapCols; col += 1) {
+        mapCtx.beginPath();
+        mapCtx.moveTo(col * tileSize + 0.5, 0);
+        mapCtx.lineTo(col * tileSize + 0.5, mapCanvas.height);
+        mapCtx.stroke();
+      }
+    }
+
+    function drawAutoTile(tile, row, col, x, y, tileSize) {
+      const size = tile.maskType;
+      const cell = tileSize / size;
+
+      const hasNeighbor = (r, c) => {
+        if (r < 0 || c < 0 || r >= mapRows || c >= mapCols) return false;
+        return mapGrid[r][c] !== null;
+      };
+
+      const north = hasNeighbor(row - 1, col);
+      const south = hasNeighbor(row + 1, col);
+      const west = hasNeighbor(row, col - 1);
+      const east = hasNeighbor(row, col + 1);
+      const noNeighbors = !(north || south || west || east);
+
+      for (let r = 0; r < size; r += 1) {
+        for (let c = 0; c < size; c += 1) {
+          if (!tile.mask[r][c]) continue;
+          let drawCell = true;
+
+          if (!noNeighbors) {
+            if (size === 3) {
+              if (r === 0 && c === 1) drawCell = north;
+              if (r === 2 && c === 1) drawCell = south;
+              if (r === 1 && c === 0) drawCell = west;
+              if (r === 1 && c === 2) drawCell = east;
+              if (r === 0 && c === 0) drawCell = north && west;
+              if (r === 0 && c === 2) drawCell = north && east;
+              if (r === 2 && c === 0) drawCell = south && west;
+              if (r === 2 && c === 2) drawCell = south && east;
+            } else if (size === 2) {
+              if (r === 0 && c === 0) drawCell = north && west;
+              if (r === 0 && c === 1) drawCell = north && east;
+              if (r === 1 && c === 0) drawCell = south && west;
+              if (r === 1 && c === 1) drawCell = south && east;
+            }
+          }
+
+          if (!drawCell) continue;
+          mapCtx.drawImage(
+            tile.canvas,
+            c * cell,
+            r * cell,
+            cell,
+            cell,
+            x + c * cell,
+            y + r * cell,
+            cell,
+            cell
+          );
+        }
+      }
+    }
+
+    function handleTileClick(event) {
+      if (!tiles.length) return;
+      const rect = tilesCanvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const tileSize = Number(tileSizeInput.value);
+      const columns = Math.max(1, Math.floor(tilesCanvas.width / tileSize));
+      const col = Math.floor(x / tileSize);
+      const row = Math.floor(y / tileSize);
+      const index = row * columns + col;
+
+      if (index >= tiles.length) return;
+      selectedTileIndex = index;
+      updateSelectedBadge();
+
+      const tile = tiles[index];
+      const localX = x - col * tileSize;
+      const localY = y - row * tileSize;
+
+      if (getTool() === "pencil") {
+        drawOnTile(tile, localX, localY);
+        return;
+      }
+
+      const size = tile.maskType;
+      const cell = tileSize / size;
+      const maskCol = Math.floor(localX / cell);
+      const maskRow = Math.floor(localY / cell);
+      tile.mask[maskRow][maskCol] = !tile.mask[maskRow][maskCol];
+      renderTiles();
+      renderMap();
+    }
+
+    function getMapCellFromEvent(event) {
+      const rect = mapCanvas.getBoundingClientRect();
+      const tileSize = Number(tileSizeInput.value);
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      const col = Math.floor(x / tileSize);
+      const row = Math.floor(y / tileSize);
+      return { row, col, x, y };
+    }
+
+    function handleMapPointer(event) {
+      if (selectedTileIndex === null) return;
+      const { row, col, x, y } = getMapCellFromEvent(event);
+      if (row < 0 || col < 0 || row >= mapRows || col >= mapCols) return;
+
+      const tool = getTool();
+      if (tool === "auto") {
+        mapGrid[row][col] = selectedTileIndex;
+        renderMap();
+      } else {
+        const tileIndex = mapGrid[row][col] ?? selectedTileIndex;
+        mapGrid[row][col] = tileIndex;
+        const tile = tiles[tileIndex];
+        const tileSize = Number(tileSizeInput.value);
+        const localX = x - col * tileSize;
+        const localY = y - row * tileSize;
+        drawOnTile(tile, localX, localY);
+      }
+    }
+
+    function drawOnTile(tile, localX, localY) {
+      const color = pencilColorInput.value;
+      const size = Number(pencilSizeInput.value);
+      tile.ctx.fillStyle = color;
+      tile.ctx.beginPath();
+      tile.ctx.arc(localX, localY, size, 0, Math.PI * 2);
+      tile.ctx.fill();
+      renderTiles();
+      renderMap();
+    }
+
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      sourceImage = await loadImage(file);
+      tileStatus.textContent = "PNGを読み込みました。スライスを押してください。";
+    });
+
+    sliceButton.addEventListener("click", () => {
+      sliceTiles();
+      initMap();
+    });
+
+    resetMasksButton.addEventListener("click", resetMasks);
+    maskTypeSelect.addEventListener("change", resetMasks);
+
+    tilesCanvas.addEventListener("click", handleTileClick);
+
+    mapCanvas.addEventListener("pointerdown", (event) => {
+      isDrawing = true;
+      handleMapPointer(event);
+    });
+    mapCanvas.addEventListener("pointermove", (event) => {
+      if (!isDrawing) return;
+      handleMapPointer(event);
+    });
+    window.addEventListener("pointerup", () => {
+      isDrawing = false;
+    });
+
+    resizeMapButton.addEventListener("click", () => {
+      initMap();
+    });
+
+    exportButton.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.download = "auto-tile-map.png";
+      link.href = mapCanvas.toDataURL("image/png");
+      link.click();
+    });
+
+    window.addEventListener("resize", () => {
+      renderTiles();
+    });
+
+    initMap();
+  </script>
+</body>
+</html>
